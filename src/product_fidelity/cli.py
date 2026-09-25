@@ -10,7 +10,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from product_fidelity.fal_api import HEIGHT, WIDTH, estimated_cost, log_event, reserved_spend
+from product_fidelity.fal_api import HEIGHT, WIDTH, estimated_cost, load_fal_key, log_event, reserved_spend
 
 
 def configure_key() -> None:
@@ -22,13 +22,12 @@ def configure_key() -> None:
         raise SystemExit("A single-line fal API key is required.")
     fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as env_file:
-        env_file.write(f"FAL_KEY={key}\nFAL_MAX_SPEND_USD=8.00\n")
+        env_file.write(f"FAL_API_KEY={key}\nFAL_MAX_SPEND_USD=8.00\n")
     print("Saved .env with owner-only permissions. It is ignored by Git.")
 
 
 def doctor() -> None:
-    load_dotenv()
-    key_state = "present" if os.getenv("FAL_KEY") else "missing"
+    key_state = "present" if load_fal_key() else "missing"
     log_event("setup_checked", fal_key=key_state)
     print("fal key:", key_state)
     print("spend limit: $" + os.getenv("FAL_MAX_SPEND_USD", "8.00"))

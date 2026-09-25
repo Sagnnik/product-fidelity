@@ -22,6 +22,14 @@ HEIGHT = 1024
 LOG_FILE = Path("logs/run.log")
 
 
+def load_fal_key() -> bool:
+    load_dotenv()
+    key = os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY")
+    if key:
+        os.environ["FAL_KEY"] = key
+    return bool(key)
+
+
 def estimated_cost(endpoint: str, width: int, height: int) -> Decimal:
     return PRICE_PER_MP[endpoint] * max(1, math.ceil(width * height / 1_000_000))
 
@@ -46,9 +54,8 @@ def reserved_spend() -> Decimal:
 
 def call(endpoint: str, arguments: dict[str, Any], *, width: int, height: int) -> dict[str, Any]:
     """Log estimated spend before submitting one image request."""
-    load_dotenv()
-    if not os.getenv("FAL_KEY"):
-        raise RuntimeError("FAL_KEY is missing. Run `product-fidelity configure-key` first.")
+    if not load_fal_key():
+        raise RuntimeError("fal key is missing. Run `product-fidelity configure-key` first.")
     if arguments.get("num_images", 1) != 1:
         raise ValueError("Use one output image per request so the cost estimate stays accurate")
     cost = estimated_cost(endpoint, width, height)
