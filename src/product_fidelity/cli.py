@@ -10,11 +10,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from product_fidelity.budget import (
-    DEFAULT_HEIGHT,
-    DEFAULT_WIDTH,
-    estimated_cost,
-)
+from product_fidelity.fal_api import HEIGHT, WIDTH, estimated_cost, log_event, reserved_spend
 
 
 def configure_key() -> None:
@@ -32,9 +28,12 @@ def configure_key() -> None:
 
 def doctor() -> None:
     load_dotenv()
-    print("fal key:", "present" if os.getenv("FAL_KEY") else "missing")
+    key_state = "present" if os.getenv("FAL_KEY") else "missing"
+    log_event("setup_checked", fal_key=key_state)
+    print("fal key:", key_state)
     print("spend limit: $" + os.getenv("FAL_MAX_SPEND_USD", "8.00"))
-    print("usage ledger:", ".usage/fal-ledger.json")
+    print(f"estimated spend: ${reserved_spend():.2f}")
+    print("run log: logs/run.log")
 
 
 def plan(products: int, prompts: int, seeds: int, width: int, height: int) -> None:
@@ -64,8 +63,8 @@ def main() -> None:
     planner.add_argument("--products", type=int, default=4)
     planner.add_argument("--prompts", type=int, default=3)
     planner.add_argument("--seeds", type=int, default=1)
-    planner.add_argument("--width", type=int, default=DEFAULT_WIDTH)
-    planner.add_argument("--height", type=int, default=DEFAULT_HEIGHT)
+    planner.add_argument("--width", type=int, default=WIDTH)
+    planner.add_argument("--height", type=int, default=HEIGHT)
     args = parser.parse_args()
     if args.command == "configure-key":
         configure_key()

@@ -9,11 +9,12 @@ wheels/
 # Virtual environments
 .venv
 
-# Local credentials, generated images, and usage records
+# Local credentials and experiment artifacts
 .env
 .env.*
 !.env.example
 inputs/
 outputs/
-.usage/
+logs/
+*.log
 .pytest_cache/
