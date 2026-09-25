@@ -1,0 +1,21 @@
+[project]
+name = "product-fidelity"
+version = "0.1.0"
+description = "A small, reproducible study of product fidelity in generated ad creatives"
+readme = "README.md"
+authors = [
+    { name = "Sagnnik Biswas", email = "sagnnikbiswas2002@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fal-client>=0.7,<1",
+    "pillow>=11,<13",
+    "python-dotenv>=1,<2",
+]
+
+[project.scripts]
+product-fidelity = "product_fidelity.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
