@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import math
 import os
+import re
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -19,7 +19,7 @@ PRICE_PER_MP = {
 }
 WIDTH = 768
 HEIGHT = 1024
-LOG_FILE = Path("logs/run.log")
+LOG_FILE = Path("LOGS.md")
 
 
 def load_fal_key() -> bool:
@@ -35,21 +35,20 @@ def estimated_cost(endpoint: str, width: int, height: int) -> Decimal:
 
 
 def log_event(event: str, **details: Any) -> None:
-    LOG_FILE.parent.mkdir(exist_ok=True)
-    record = {"time": datetime.now(timezone.utc).isoformat(), "event": event, **details}
+    time = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    detail_text = ", ".join(f"{key}={value}" for key, value in details.items())
+    line = f"- {time} {event}: {detail_text}"
+    if event == "request_reserved":
+        line += f" <!-- fal:reserved_usd={details['estimated_usd']} -->"
     with LOG_FILE.open("a", encoding="utf-8") as log:
-        log.write(json.dumps(record) + "\n")
+        log.write(line + "\n")
 
 
 def reserved_spend() -> Decimal:
     if not LOG_FILE.exists():
         return Decimal("0")
-    total = Decimal("0")
-    for line in LOG_FILE.read_text(encoding="utf-8").splitlines():
-        record = json.loads(line)
-        if record["event"] == "request_reserved":
-            total += Decimal(record["estimated_usd"])
-    return total
+    charges = re.findall(r"<!-- fal:reserved_usd=([0-9.]+) -->", LOG_FILE.read_text(encoding="utf-8"))
+    return sum((Decimal(charge) for charge in charges), Decimal("0"))
 
 
 def call(endpoint: str, arguments: dict[str, Any], *, width: int, height: int) -> dict[str, Any]:

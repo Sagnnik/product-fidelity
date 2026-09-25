@@ -32,7 +32,7 @@ def doctor() -> None:
     print("fal key:", key_state)
     print("spend limit: $" + os.getenv("FAL_MAX_SPEND_USD", "8.00"))
     print(f"estimated spend: ${reserved_spend():.2f}")
-    print("run log: logs/run.log")
+    print("project log: LOGS.md")
 
 
 def plan(products: int, prompts: int, seeds: int, width: int, height: int) -> None:
