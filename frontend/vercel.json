@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://stillroom-api-production.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/create",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/history",
+      "destination": "/index.html"
+    }
+  ]
+}

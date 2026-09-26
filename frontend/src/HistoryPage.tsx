@@ -22,7 +22,7 @@ const date = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' })
 
 function statusLabel(status: string) {
   if (status === 'completed') return 'Ready to review'
-  if (status === 'failed') return 'Needs attention'
+  if (status === 'failed' || status === 'interrupted') return 'Needs attention'
   return 'Creating images'
 }
 

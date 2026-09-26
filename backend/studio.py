@@ -230,7 +230,7 @@ def add_images(campaign_id: str, count: int) -> dict[str, Any]:
     if not 1 <= count <= MAX_BATCH_IMAGES:
         raise ValueError("Choose between 1 and 10 images per batch")
     def add(manifest: dict[str, Any]) -> None:
-        if manifest["status"] not in {"completed", "failed"}:
+        if manifest["status"] not in {"completed", "failed", "interrupted"}:
             raise ValueError("Wait for the current batch to finish")
         if manifest["funding"] == "free":
             if len(manifest["scenes"]) + count > MAX_BATCH_IMAGES:
@@ -243,6 +243,47 @@ def add_images(campaign_id: str, count: int) -> dict[str, Any]:
     return update_campaign(campaign_id, add)
 
 
+def recover_interrupted_campaigns() -> None:
+    """Reconcile files after a restart, without submitting any fal requests."""
+    if not ROOT.exists():
+        return
+    for path in ROOT.glob("*/manifest.json"):
+        try:
+            campaign_id = path.parent.name
+            manifest = read_campaign(campaign_id)
+            if manifest["status"] not in {"queued", "running"}:
+                continue
+
+            def recover(item: dict[str, Any]) -> None:
+                for scene in item["scenes"]:
+                    if scene["status"] != "running":
+                        continue
+                    filename = f"{scene['id']}.png"
+                    if (path.parent / filename).is_file():
+                        scene.update(status="completed", file=filename)
+                    else:
+                        # The paid request may have succeeded. Never submit it again here.
+                        scene["status"] = "interrupted"
+                item["status"] = "interrupted"
+                item["error"] = "Generation was interrupted. Continue only the images still waiting; an interrupted image may have been billed."
+
+            update_campaign(campaign_id, recover)
+            log_event("campaign_interrupted", campaign_id=campaign_id)
+        except (OSError, ValueError, KeyError):
+            continue
+
+
+def resume_queued_campaign(campaign_id: str) -> dict[str, Any]:
+    def resume(item: dict[str, Any]) -> None:
+        if item["status"] not in {"interrupted", "failed"}:
+            raise ValueError("This campaign is not waiting for recovery")
+        if not any(scene["status"] == "queued" for scene in item["scenes"]):
+            raise ValueError("No unsubmitted images remain. Add images to make a new request.")
+        item["status"] = "queued"
+        item.pop("error", None)
+    return update_campaign(campaign_id, resume)
+
+
 def download_image(url: str, destination: Path) -> None:
     request = urllib.request.Request(url, headers={"User-Agent": "product-fidelity-studio/0.1"})
     with urllib.request.urlopen(request, timeout=120) as response:
@@ -252,7 +293,9 @@ def download_image(url: str, destination: Path) -> None:
     image = Image.open(io.BytesIO(raw)).convert("RGB")
     if image.size != (WIDTH, HEIGHT):
         raise RuntimeError(f"Unexpected generated size: {image.size}")
-    image.save(destination, format="PNG")
+    temporary = destination.with_suffix(".tmp")
+    image.save(temporary, format="PNG")
+    temporary.replace(destination)
 
 
 def make_contact_sheet(campaign_id: str) -> None:
@@ -345,7 +388,8 @@ def generate_campaign(campaign_id: str, fal_key: str | None = None) -> None:
             make_contact_sheet(campaign_id)
         log_event("campaign_failed", campaign_id=campaign_id, error=type(error).__name__)
         return
-    update_campaign(campaign_id, lambda m: m.update(status="completed", finished_at=now()))
+    final_status = "interrupted" if any(s["status"] == "interrupted" for s in read_campaign(campaign_id)["scenes"]) else "completed"
+    update_campaign(campaign_id, lambda m: m.update(status=final_status, finished_at=now()))
     make_contact_sheet(campaign_id)
     log_event("campaign_completed", campaign_id=campaign_id)
 

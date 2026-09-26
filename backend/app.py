@@ -21,7 +21,7 @@ from backend import social
 from backend.studio import (
     ENDPOINT, HEIGHT, ISSUES, MAX_BATCH_IMAGES, MAX_UPLOAD_BYTES, ROOT, SCENES, WIDTH,
     add_images, campaign_dir, campaign_metrics, generate_campaign, read_owned_campaign,
-    review_scene, start_campaign,
+    recover_interrupted_campaigns, resume_queued_campaign, review_scene, start_campaign,
 )
 
 app = FastAPI(title="Frame / Ad Photo Studio", version="0.1.0")
@@ -32,6 +32,11 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Fal-Key"],
 )
 executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="campaign")
+
+
+@app.on_event("startup")
+def reconcile_campaigns() -> None:
+    recover_interrupted_campaigns()
 
 
 class ReviewRequest(BaseModel):
@@ -165,6 +170,26 @@ def create_more_images(
         if fal_key is None and reserved_spend() + per_image * image_count > Decimal(os.getenv("FAL_MAX_SPEND_USD", "8.00")):
             raise HTTPException(status_code=403, detail="The studio's free budget is exhausted. Use your own fal key to continue.")
         manifest = add_images(campaign_id, image_count)
+    except ValueError as error:
+        raise HTTPException(status_code=404 if str(error) == "Unknown campaign" else 400, detail=str(error)) from error
+    executor.submit(generate_campaign, campaign_id, fal_key)
+    return manifest
+
+
+@app.post("/api/campaigns/{campaign_id}/resume", status_code=202)
+def resume_campaign(
+    campaign_id: str, user_id: UserId, x_fal_key: str | None = Header(default=None),
+) -> dict:
+    fal_key = x_fal_key.strip() if x_fal_key else None
+    if fal_key and len(fal_key) > 500:
+        raise HTTPException(status_code=400, detail="fal key is too long")
+    try:
+        current = read_owned_campaign(campaign_id, user_id)
+        if current["funding"] == "byok" and not fal_key:
+            raise ValueError("Enter your fal key to continue")
+        if current["funding"] == "free" and fal_key:
+            raise ValueError("This campaign uses project credit")
+        manifest = resume_queued_campaign(campaign_id)
     except ValueError as error:
         raise HTTPException(status_code=404 if str(error) == "Unknown campaign" else 400, detail=str(error)) from error
     executor.submit(generate_campaign, campaign_id, fal_key)

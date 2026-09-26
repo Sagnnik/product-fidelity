@@ -117,7 +117,7 @@ function SceneCard({
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-4 px-7 text-center">
             <div className={`h-10 w-10 rounded-full border-[3px] border-ink/15 border-t-orange ${scene.status === 'running' ? 'animate-spin' : ''}`} />
-            <p className="text-sm text-ink-soft">{scene.status === 'running' ? 'Creating this scene…' : scene.status === 'failed' ? 'This scene stopped.' : 'Waiting its turn'}</p>
+            <p className="text-sm text-ink-soft">{scene.status === 'running' ? 'Creating this scene…' : scene.status === 'interrupted' ? 'Interrupted. This request may have been billed.' : scene.status === 'failed' ? 'This scene stopped.' : 'Waiting its turn'}</p>
           </div>
         )}
         <span className="absolute left-3 top-3 rounded-full bg-[#fff8f7]/90 px-3 py-1 text-[10px] font-bold tracking-[.13em] text-ink uppercase backdrop-blur-sm">{scene.name}</span>
@@ -213,9 +213,10 @@ function CreatePage() {
       }
     }
     void refresh()
-    const timer = window.setInterval(() => { void refresh() }, 2500)
+    const active = !campaign || ['queued', 'running'].includes(campaign.status)
+    const timer = active ? window.setInterval(() => { void refresh() }, 2500) : undefined
     return () => { stopped = true; window.clearInterval(timer) }
-  }, [getToken, isSignedIn, runId])
+  }, [campaign?.status, getToken, isSignedIn, runId])
 
   const progressKey = campaign?.scenes.map((scene) => scene.status).join(',')
 
@@ -289,6 +290,23 @@ function CreatePage() {
       const next = await api<Campaign>(getToken, `/api/campaigns/${campaign.id}/images`, {
         method: 'POST', body: form,
         headers: campaign.funding === 'byok' ? { 'X-Fal-Key': falKey.trim() } : undefined,
+      })
+      setCampaign(next)
+    } catch (failure) {
+      setReviewError((failure as Error).message)
+    } finally {
+      setSubmittingMore(false)
+    }
+  }
+
+  async function resumeRemaining() {
+    if (!campaign) return
+    if (campaign.funding === 'byok' && !falKey.trim()) { setReviewError('Enter your fal key to continue.'); return }
+    setReviewError('')
+    setSubmittingMore(true)
+    try {
+      const next = await api<Campaign>(getToken, `/api/campaigns/${campaign.id}/resume`, {
+        method: 'POST', headers: campaign.funding === 'byok' ? { 'X-Fal-Key': falKey.trim() } : undefined,
       })
       setCampaign(next)
     } catch (failure) {
@@ -443,7 +461,7 @@ function CreatePage() {
         {campaign ? (
           <section id="campaign-results" className="mx-auto max-w-[1440px] scroll-mt-8 px-5 py-16 text-[#fff4f1] sm:px-10 lg:px-14 lg:py-20">
             <div className="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-7">
-              <div><p className="text-[11px] font-bold tracking-[.18em] text-[#f0a6bb] uppercase">Campaign / {campaign.id}</p><h2 className="mt-3 font-display text-[clamp(2.2rem,4vw,4.25rem)] leading-tight tracking-[-.04em]">Your campaign directions.</h2><p className="mt-2 text-sm text-[#e1d1d8]" aria-live="polite">{campaign.status === 'completed' ? `All ${campaign.scenes.length} images are ready for review.` : campaign.status === 'failed' ? campaign.error : `${completed} of ${campaign.scenes.length} images ready · creating one image at a time…`}</p></div>
+              <div><p className="text-[11px] font-bold tracking-[.18em] text-[#f0a6bb] uppercase">Campaign / {campaign.id}</p><h2 className="mt-3 font-display text-[clamp(2.2rem,4vw,4.25rem)] leading-tight tracking-[-.04em]">Your campaign directions.</h2><p className="mt-2 text-sm text-[#e1d1d8]" aria-live="polite">{campaign.status === 'completed' ? `All ${campaign.scenes.length} images are ready for review.` : ['failed', 'interrupted'].includes(campaign.status) ? campaign.error : `${completed} of ${campaign.scenes.length} images ready · creating one image at a time…`}</p></div>
               <div className="flex flex-wrap items-center gap-4">
                 <label className="flex cursor-pointer items-center gap-2 text-xs font-bold"><input type="checkbox" checked={guides} onChange={(event) => setGuides(event.target.checked)} className="h-4 w-4 accent-orange" /> Show headline space</label>
                 <button type="button" disabled={approved === 0} onClick={() => void download(`/api/campaigns/${campaign.id}/approved-download`, `approved-${campaign.id}.zip`)} className="rounded-full bg-ink px-4 py-2 text-xs font-bold text-white transition-colors duration-150 hover:bg-[#36495c] disabled:cursor-not-allowed disabled:opacity-50">Export approved ({approved}) ↓</button>
@@ -459,12 +477,15 @@ function CreatePage() {
               {campaign.scenes.map((scene) => <SceneCard key={scene.id} campaign={campaign} scene={scene} guides={guides} issues={selectedIssues[scene.id] ?? scene.issues} busy={reviewing} onIssue={toggleIssue} onReview={review} onDownload={(item) => { if (item.file) void download(fileUrl(campaign.id, item.file), `${item.id}-draft.png`) }} />)}
             </div>
             {reviewError ? <p role="alert" className="mt-5 rounded-xl bg-[#fae4da] px-4 py-3 text-sm text-[#8d3e2d]">{reviewError}</p> : null}
+            {['interrupted', 'failed'].includes(campaign.status) && campaign.scenes.some((scene) => scene.status === 'queued') ? (
+              <button type="button" disabled={submittingMore} onClick={() => void resumeRemaining()} className="mt-6 rounded-full bg-orange px-5 py-3 text-xs font-bold text-white disabled:opacity-50">Continue unstarted images ↗</button>
+            ) : null}
             {(campaign.funding === 'byok' || (moreMax > 0 && !(campaign.status === 'failed' && campaign.estimated_reserved_usd === 0))) ? (
               <form onSubmit={addMore} className="mt-8 flex flex-wrap items-end gap-4 rounded-[20px] border border-white/20 bg-[#172331]/80 p-5 sm:p-6">
                 <div className="min-w-[200px] flex-1"><h3 className="font-display text-2xl">More images, same campaign.</h3><p className="mt-1 text-xs text-[#e1d1d8]">{campaign.funding === 'byok' ? 'Add 1–10 per batch, with no campaign image cap.' : `${moreMax} of 10 project-funded image slots remain in this campaign.`}</p></div>
                 <label className="text-xs font-bold">Images <input type="number" min={1} max={moreMax} step={1} value={moreBatchCount} onChange={(event) => setMoreCount(event.currentTarget.valueAsNumber)} className="mt-2 block w-20 rounded-xl border border-line bg-[#fff8f7] px-3 py-2.5 text-sm text-ink" /></label>
                 {campaign.funding === 'byok' ? <label className="min-w-[180px] flex-1 text-xs font-bold">Your fal key <input type="password" autoComplete="off" value={falKey} onChange={(event) => setFalKey(event.target.value)} placeholder="Enter your fal key" className="mt-2 block w-full rounded-xl border border-line bg-[#fff8f7] px-3 py-2.5 text-sm text-ink" /></label> : null}
-                <button type="submit" disabled={submittingMore || (campaign.funding === 'byok' && !falKey.trim()) || !['completed', 'failed'].includes(campaign.status)} className="rounded-full bg-orange px-5 py-3 text-xs font-bold text-white disabled:opacity-50">{submittingMore ? 'Adding…' : 'Add images ↗'}</button>
+                <button type="submit" disabled={submittingMore || (campaign.funding === 'byok' && !falKey.trim()) || !['completed', 'failed', 'interrupted'].includes(campaign.status)} className="rounded-full bg-orange px-5 py-3 text-xs font-bold text-white disabled:opacity-50">{submittingMore ? 'Adding…' : 'Add images ↗'}</button>
               </form>
             ) : null}
             <SocialPublish campaignId={campaign.id} scenes={campaign.scenes} getToken={getToken} />

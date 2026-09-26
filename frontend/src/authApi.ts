@@ -5,7 +5,15 @@ export async function authedFetch(getToken: GetToken, path: string, init?: Reque
   if (!token) throw new Error('Sign in to continue.')
   const headers = new Headers(init?.headers)
   headers.set('Authorization', `Bearer ${token}`)
-  return fetch(path, { ...init, headers })
+  const request = { ...init, headers }
+  const safeGet = (init?.method ?? 'GET').toUpperCase() === 'GET'
+  let response = await fetch(path, request)
+  for (const delay of [750, 1500]) {
+    if (!safeGet || response.status !== 502) break
+    await new Promise((resolve) => window.setTimeout(resolve, delay))
+    response = await fetch(path, request)
+  }
+  return response
 }
 
 export async function api<T>(getToken: GetToken, path: string, init?: RequestInit): Promise<T> {

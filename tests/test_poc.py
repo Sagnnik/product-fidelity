@@ -90,6 +90,53 @@ class PocWorkflowTest(unittest.TestCase):
         self.assertEqual(self.client.get(f"/api/campaigns/{ids[0]}/files/reference.png").status_code, 404)
         self.assertEqual(self.client.get("/api/metrics").json()["campaigns_started"], 0)
 
+    def test_restart_requires_explicit_resume_and_never_repeats_uncertain_image(self):
+        campaign_id = self.create().json()["id"]
+        def mark_running(item):
+            item["status"] = "running"
+            item["scenes"][0]["status"] = "running"
+        studio.update_campaign(campaign_id, mark_running)
+        app_module.executor.submit.reset_mock()
+
+        studio.recover_interrupted_campaigns()
+        recovered = studio.read_campaign(campaign_id)
+        self.assertEqual(recovered["status"], "interrupted")
+        self.assertEqual([scene["status"] for scene in recovered["scenes"]],
+                         ["interrupted", "queued", "queued"])
+        self.assertEqual(app_module.executor.submit.call_count, 0)
+
+        self.user = "user_B"
+        self.assertEqual(self.client.post(f"/api/campaigns/{campaign_id}/resume").status_code, 404)
+        self.user = "user_A"
+        response = self.client.post(f"/api/campaigns/{campaign_id}/resume")
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["scenes"][0]["status"], "interrupted")
+        self.assertEqual(app_module.executor.submit.call_count, 1)
+        self.assertEqual(self.client.post(f"/api/campaigns/{campaign_id}/resume").status_code, 400)
+
+    def test_completed_image_file_is_recovered_without_new_request(self):
+        campaign_id = self.create().json()["id"]
+        target = self.root / "campaigns" / campaign_id
+        Image.new("RGB", (768, 1024), "#b83d30").save(target / "studio.png")
+        studio.update_campaign(campaign_id, lambda item: (item.update(status="running"), item["scenes"][0].update(status="running")))
+        app_module.executor.submit.reset_mock()
+        studio.recover_interrupted_campaigns()
+        recovered = studio.read_campaign(campaign_id)
+        self.assertEqual(recovered["scenes"][0]["status"], "completed")
+        self.assertEqual(recovered["scenes"][0]["file"], "studio.png")
+        self.assertEqual(app_module.executor.submit.call_count, 0)
+
+    def test_exact_ten_megabyte_product_upload(self):
+        raw = sample_photo()
+        upload = raw + b"\0" * (10 * 1024 * 1024 - len(raw))
+        response = self.client.post(
+            "/api/campaigns", data={"product": "red ceramic mug", "image_count": "1"},
+            files={"image": ("mug.png", upload, "image/png")},
+        )
+        self.assertEqual(response.status_code, 202)
+        campaign_id = response.json()["id"]
+        self.assertEqual((self.root / "campaigns" / campaign_id / "source_original.png").stat().st_size, 10 * 1024 * 1024)
+
     def test_approved_export_excludes_unreviewed_images(self):
         campaign_id = self.create(byok=True).json()["id"]
         target = self.root / "campaigns" / campaign_id
