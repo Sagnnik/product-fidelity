@@ -1,21 +1,22 @@
 [project]
 name = "product-fidelity"
 version = "0.1.0"
-description = "A small, reproducible study of product fidelity in generated ad creatives"
+description = "A small reference-guided ad photo studio with human review"
 readme = "README.md"
 authors = [
     { name = "Sagnnik Biswas", email = "sagnnikbiswas2002@gmail.com" }
 ]
 requires-python = ">=3.11"
 dependencies = [
+    "clerk-backend-api>=6,<7",
+    "cryptography>=46,<49",
     "fal-client>=0.7,<1",
+    "fastapi>=0.116,<1",
     "pillow>=11,<13",
     "python-dotenv>=1,<2",
+    "python-multipart>=0.0.20,<1",
+    "uvicorn>=0.35,<1",
 ]
 
-[project.scripts]
-product-fidelity = "product_fidelity.cli:main"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[tool.uv]
+package = false

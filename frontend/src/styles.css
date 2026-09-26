@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", "Avenir Next", sans-serif;
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --color-paper: #f7edeb;
+  --color-ink: #263442;
+  --color-ink-soft: #626b73;
+  --color-orange: #a94d70;
+  --color-line: #dacbd0;
+  --color-mint: #ead9df;
+}
+
+html { background: #1b2937; scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; color: #263442; font-family: var(--font-sans); }
+button, a, input, textarea { touch-action: manipulation; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 3px solid #e889a7;
+  outline-offset: 3px;
+}
+::selection { background: #f0b7c7; color: #263442; }
+
+.site-shell {
+  background-color: #1b2937;
+  background-image: linear-gradient(100deg, rgba(17, 28, 40, .92), rgba(21, 31, 44, .68) 55%, rgba(22, 32, 44, .78)), url('/cherry-night.jpg');
+  background-position: center, center 38%;
+  background-size: cover;
+  background-attachment: fixed;
+}
+.hero-atmosphere {
+  background-image: linear-gradient(90deg, rgba(17, 28, 40, .97) 0%, rgba(17, 28, 40, .87) 38%, rgba(17, 28, 40, .22) 100%), url('/cherry-night.jpg');
+  background-position: center, center 48%;
+  background-size: cover;
+}
+.falling-petal {
+  position: absolute;
+  top: -5%;
+  width: 10px;
+  height: 16px;
+  border-radius: 85% 0 85% 0;
+  background: linear-gradient(140deg, #f8c4cf, #d77596);
+  box-shadow: 0 2px 8px rgba(64, 20, 42, .18);
+  opacity: 0;
+  animation: petal-fall 13s linear infinite;
+}
+.falling-petal:nth-child(1) { left: 4%; animation-delay: -2s; animation-duration: 14s; }
+.falling-petal:nth-child(2) { left: 15%; animation-delay: -9s; animation-duration: 12s; width: 8px; height: 12px; }
+.falling-petal:nth-child(3) { left: 27%; animation-delay: -5s; animation-duration: 16s; }
+.falling-petal:nth-child(4) { left: 39%; animation-delay: -13s; animation-duration: 15s; width: 7px; height: 11px; }
+.falling-petal:nth-child(5) { left: 51%; animation-delay: -1s; animation-duration: 13s; }
+.falling-petal:nth-child(6) { left: 62%; animation-delay: -8s; animation-duration: 17s; width: 8px; height: 12px; }
+.falling-petal:nth-child(7) { left: 72%; animation-delay: -4s; animation-duration: 14s; }
+.falling-petal:nth-child(8) { left: 81%; animation-delay: -11s; animation-duration: 16s; width: 7px; height: 11px; }
+.falling-petal:nth-child(9) { left: 91%; animation-delay: -6s; animation-duration: 12s; }
+.falling-petal:nth-child(10) { left: 35%; animation-delay: -10s; animation-duration: 18s; width: 8px; height: 12px; }
+.falling-petal:nth-child(11) { left: 67%; animation-delay: -15s; animation-duration: 19s; }
+.falling-petal:nth-child(12) { left: 96%; animation-delay: -3s; animation-duration: 17s; width: 7px; height: 11px; }
+@keyframes petal-fall {
+  0% { transform: translate3d(0, -30px, 0) rotate(0deg); opacity: 0; }
+  8% { opacity: .72; }
+  88% { opacity: .6; }
+  100% { transform: translate3d(85px, 110vh, 0) rotate(640deg); opacity: 0; }
+}
+@media (max-width: 767px) {
+  .site-shell { background-attachment: scroll; background-position: center, center top; }
+  .hero-atmosphere {
+    background-image: linear-gradient(180deg, rgba(17, 28, 40, .82), rgba(17, 28, 40, .73)), url('/cherry-night.jpg');
+    background-position: center, center 42%;
+  }
+  .falling-petal:nth-child(n+7) { display: none; }
+}
+.portrait-guides::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 25%;
+  border-bottom: 1px dashed rgba(255,255,255,.6);
+  pointer-events: none;
+}
+.portrait-guides::after {
+  content: "Headline space";
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  color: white;
+  text-shadow: 0 1px 5px rgba(0,0,0,.8);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  .falling-petals { display: none; }
+}

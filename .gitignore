@@ -18,3 +18,8 @@ outputs/
 LOGS.md
 HANDOFF.md
 .pytest_cache/
+.fal_call.lock
+db/
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
