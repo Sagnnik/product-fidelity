@@ -255,6 +255,36 @@ class PocWorkflowTest(unittest.TestCase):
         self.assertEqual(self.client.post(f"/api/campaigns/{campaign_id}/images", data={"image_count": "1"},
                                           headers={"X-Fal-Key": "dummy-personal-key"}).status_code, 400)
 
+    def test_repeated_scenes_get_distinct_seeds(self):
+        response = self.client.post(
+            "/api/campaigns",
+            data={"product": "red ceramic mug", "image_count": "5",
+                  "scene_description": "a warm cream studio sweep"},
+            files={"image": ("mug.png", sample_photo(), "image/png")},
+            headers={"X-Fal-Key": "dummy-personal-key"},
+        )
+        self.assertEqual(response.status_code, 202)
+        campaign_id = response.json()["id"]
+        seeds = []
+        class FakeClient:
+            def __init__(self, key):
+                self.key = key
+            def upload_file(self, path):
+                return "https://example.invalid/reference.png"
+            def subscribe(self, endpoint, arguments):
+                seeds.append(arguments["seed"])
+                return {"images": [{"url": "https://example.invalid/image.png"}], "seed": arguments["seed"]}
+        def fake_download(url, destination):
+            Image.new("RGB", (768, 1024), "#b83d30").save(destination, format="PNG")
+        with patch("fal_client.SyncClient", FakeClient):
+            with patch.object(studio, "download_image", side_effect=fake_download):
+                studio.generate_campaign(campaign_id, fal_key="dummy-personal-key")
+        manifest = studio.read_campaign(campaign_id)
+        self.assertEqual(manifest["status"], "completed")
+        self.assertEqual(seeds, [studio.SEED + index for index in range(5)])
+        self.assertEqual([scene["seed"] for scene in manifest["scenes"]], seeds)
+        self.assertTrue(all(scene["file"] for scene in manifest["scenes"]))
+
     def test_meta_connection_approved_only_publish_and_signed_media(self):
         campaign = self.create(byok=True).json()
         campaign_id = campaign["id"]

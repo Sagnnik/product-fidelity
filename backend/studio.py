@@ -335,10 +335,13 @@ def generate_campaign(campaign_id: str, fal_key: str | None = None) -> None:
         image_urls = [source_url]
         if background_file:
             image_urls.append(fal_client.SyncClient(key=key).upload_file(str(target / background_file)))
-        for scene in read_campaign(campaign_id)["scenes"]:
+        for index, scene in enumerate(read_campaign(campaign_id)["scenes"]):
             if scene["status"] != "queued":
                 continue
             scene_id = scene["id"]
+            # Offset the seed per image slot so repeated scenes get distinct
+            # images. The offset is positional, so a resumed scene reuses its seed.
+            seed = SEED + index
             def mark_running(m: dict[str, Any]) -> None:
                 next(s for s in m["scenes"] if s["id"] == scene_id)["status"] = "running"
             update_campaign(campaign_id, mark_running)
@@ -348,7 +351,7 @@ def generate_campaign(campaign_id: str, fal_key: str | None = None) -> None:
                 result = call(ENDPOINT, {
                     "prompt": scene["prompt"], "image_urls": image_urls,
                     "image_size": {"width": WIDTH, "height": HEIGHT},
-                    "seed": SEED, "output_format": "png",
+                    "seed": seed, "output_format": "png",
                 }, width=WIDTH, height=HEIGHT, fal_key=fal_key)
                 filename = f"{scene_id}.png"
                 download_image(result["images"][0]["url"], target / filename)
@@ -356,7 +359,7 @@ def generate_campaign(campaign_id: str, fal_key: str | None = None) -> None:
                 delta = float(estimated_cost(ENDPOINT, WIDTH, HEIGHT, input_images=len(image_urls))) if fal_key else float(reserved_spend() - spend_before)
                 def mark_done(m: dict[str, Any]) -> None:
                     row = next(s for s in m["scenes"] if s["id"] == scene_id)
-                    row.update(status="completed", file=filename, generation_seconds=elapsed, returned_seed=result.get("seed"))
+                    row.update(status="completed", file=filename, generation_seconds=elapsed, seed=seed, returned_seed=result.get("seed"))
                     m["estimated_reserved_usd"] = round(m["estimated_reserved_usd"] + delta, 3)
                     if m["first_preview_seconds"] is None:
                         m["first_preview_seconds"] = round(time.monotonic() - started, 2)
